@@ -31,6 +31,7 @@
 // 2014-06-24 - Added receive support for smoke detectors FA20RF / RM150RF (KD101 not verified)
 // 2014-06-24 - Added send / activate support for smoke detectors FA20RF / RM150RF (KD101 not verified) -- not yet inetgrated in FHEM-Modul
 // 2014-06-24 - Integrated mick6300 developments (not tested yet, global Variables have to be sorted into #ifdefs, Modul have to sorted to 1-WIRE
+// 2014-07-05 - Added blinking LED (PinD13/onboardLED) to signalize received or sent messages. This option requires the Timer1 library which can be found under: http://playground.arduino.cc/Code/Timer1
 
 // --- Configuration ---------------------------------------------------------
 #define PROGNAME               "FHEMduino"
@@ -42,7 +43,7 @@
 #define PIN_RECEIVE            2
 #endif
 
-#define PIN_LED                13
+#define PIN_LED                13 // Message-LED
 #define PIN_SEND               11
 
 
@@ -57,7 +58,7 @@
 #ifndef __AVR_ATmega32U4__
 //#define WIRE-SUP        // Compile sketch with 1-WIRE-Support. This does not work on ATMega32U
 #endif
-#define COMP_DCF77      // Compile sketch witdh DCF-77 Support (currently disableling this is not working, has still to be done)
+//#define COMP_DCF77      // Compile sketch witdh DCF-77 Support (currently disableling this is not working, has still to be done)
 #define nop() __asm volatile ("nop")
 #define COMP_PT2262     // Compile sketch with PT2262 (IT / ELRO switches)
 #define COMP_FA20RF     // Compile sketch with smoke detector Flamingo FA20RF / ELRO RM150RF
@@ -69,7 +70,10 @@
 
 #define COMP_OSV2       // Compile sketch with OSV2 Support
 #define COMP_Cresta     // Compile sketch with Cresta Support (currently not implemented, just for future use)
-
+//#define MSGLED          // Compile sketch with blinking LED to signalize when a Message is received or send
+#ifdef MSGLED
+  #include "TimerOne.h"  // Timer for LED Blinking
+#endif
 // Future enhancement
 //#define COMP_TX2_4    // Compile sketch for LaCroose TX2/4 support
 //#define COMP_OSV3     // Compile sketch with OSV3 Support (currently not implemented, just for future use)
@@ -109,6 +113,7 @@ XrfDecoder xrf;
 #endif
 */
 
+//###############################################
 class DecodeOOK {
   protected:
     byte total_bits, bits, flip, state, pos, data[25];
@@ -507,6 +512,7 @@ class HezDecoder : public DecodeOOK {
 };
 HezDecoder hez;
 #endif
+//##########################################################################################
 
 /*
  * PT2262
@@ -524,8 +530,10 @@ String cmdstring;
 volatile bool available = false;
 String message = "";
 
-
-
+// MessageLED
+#ifdef MSGLED
+  volatile bool blinkLED = false;
+#endif
 /*
  * DCF77_SerialTimeOutput
  * Ralf Bohnen, 2013
@@ -620,7 +628,7 @@ int fehler = 0;
 
 void setup() {
   // put your setup code here, to run once:
-  
+              
   Serial.begin(BAUDRATE);
   
   #ifdef DEBUG
@@ -640,6 +648,12 @@ void setup() {
   pinMode(PIN_RECEIVE,INPUT);
   enableReceive();
   pinMode(PIN_SEND,OUTPUT);
+
+// MSGLED
+pinMode(PIN_LED,OUTPUT);
+Timer1.initialize(1*10000); //Interrupt wird alle 1zehntel Sekunden ausgelöst
+Timer1.attachInterrupt(blinken);
+
 
 #ifdef COMP_DHT11
   Wire.begin();
@@ -667,6 +681,13 @@ void setup() {
 #endif // COMP_DCF77
 
 }
+
+#ifdef MSGLED
+ void blinken() {
+     digitalWrite(PIN_LED, blinkLED);
+     blinkLED=false;
+     }
+#endif
 
 void loop() {
   static uint32_t timer;
@@ -696,6 +717,9 @@ void loop() {
   }
 
   if (messageAvailable()) {
+    #ifdef MSGLED
+     blinkLED=true; // activate LED
+    #endif 
     Serial.println(message);
     resetAvailable();
   }
@@ -1098,11 +1122,17 @@ void HandleCommand(String cmd)
   // Version Information
   if (cmd.equals("V"))
   {
+    #ifdef MSGLED
+     blinkLED=true; // activate LED
+    #endif 
     Serial.print(PROGVERS);
     Serial.println(F(" FHEMduino - compiled at " __DATE__ " " __TIME__));
   }
   // Print free Memory
   else if (cmd.equals("R")) {
+    #ifdef MSGLED
+     blinkLED=true; // activate LED
+    #endif 
     Serial.print(F("R"));
     Serial.println(freeRam());
   }
@@ -1122,6 +1152,9 @@ void HandleCommand(String cmd)
   // Set Intertechno Repetition
   else if (cmd.startsWith("isr"))
   {
+    #ifdef MSGLED
+     blinkLED=true; // activate LED
+    #endif
     char msg[3];
     cmd.substring(3).toCharArray(msg,3);
     ITrepetition = atoi(msg);
@@ -1130,11 +1163,12 @@ void HandleCommand(String cmd)
   // Switch Intertechno Devices
   else if (cmd.startsWith("is"))
   {
-    digitalWrite(PIN_LED,HIGH);
+    #ifdef MSGLED
+     blinkLED=true; // activate LED
+    #endif 
     char msg[13];
     cmd.substring(2).toCharArray(msg,13);
     sendPT2262(msg);
-    digitalWrite(PIN_LED,LOW);
     Serial.println(cmd);
   }
 #endif
@@ -2175,4 +2209,3 @@ byte read_dht11_dat()
 
 //   return C;
 // }
-
