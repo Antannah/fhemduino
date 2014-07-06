@@ -31,7 +31,7 @@
 // 2014-06-24 - Added receive support for smoke detectors FA20RF / RM150RF (KD101 not verified)
 // 2014-06-24 - Added send / activate support for smoke detectors FA20RF / RM150RF (KD101 not verified) -- not yet inetgrated in FHEM-Modul
 // 2014-06-24 - Integrated mick6300 developments (not tested yet, global Variables have to be sorted into #ifdefs, Modul have to sorted to 1-WIRE
-// 2014-07-05 - Added blinking LED (PinD13/onboardLED) to signalize received or sent messages. This option requires the Timer1 library which can be found under: http://playground.arduino.cc/Code/Timer1
+// 2014-07-05 - Added blinking LED (PinD13/onboardLED) to signalize received or send messages. This option requires the Timer1 library which can be found under: http://playground.arduino.cc/Code/Timer1
 
 // --- Configuration ---------------------------------------------------------
 #define PROGNAME               "FHEMduino"
@@ -650,10 +650,11 @@ void setup() {
   pinMode(PIN_SEND,OUTPUT);
 
 // MSGLED
-pinMode(PIN_LED,OUTPUT);
-Timer1.initialize(1*10000); //Interrupt wird alle 1zehntel Sekunden ausgelöst
-Timer1.attachInterrupt(blinken);
-
+#ifdef MSGLED
+  pinMode(PIN_LED,OUTPUT);
+  Timer1.initialize(1*10000); //Interrupt wird alle 1zehntel Sekunden ausgelöst
+  Timer1.attachInterrupt(blinken);
+#endif
 
 #ifdef COMP_DHT11
   Wire.begin();
